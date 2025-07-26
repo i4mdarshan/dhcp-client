@@ -54,11 +54,13 @@
 
     <script>
       const requestBtn = document.getElementById("requestIpBtn");
+      const releaseBtn = document.getElementById('releaseIpBtn');
       const detectMacBtn = document.getElementById("detectMacBtn");
       const macInput = document.getElementById("macAddress");
       const statusDiv = document.getElementById("status");
       const statusText = statusDiv.querySelector("p");
       let pollingInterval;
+      let leasedIpInfo = {};
 
       // set status
       function setStatus(message, type) {
@@ -103,12 +105,14 @@
             .then((data) => {
               if (data.status === "SUCCESS") {
                 clearInterval(pollingInterval);
+                leasedIpInfo = { ip_address: data.assigned_ip, server_id: data.server_id };
                 setStatus(
                   `<strong>Success!</strong> Assigned IP: <span class="font-mono">${data.assigned_ip}</span>`,
                   "success"
                 );
                 requestBtn.disabled = false;
-                requestBtn.textContent = "Request IP Address";
+                requestBtn.textContent = "Request New IP Address";
+                releaseBtn.classList.remove('hidden');
               } else if (data.status.startsWith("FAILED")) {
                 clearInterval(pollingInterval);
                 setStatus(`<strong>Failed:</strong> ${data.status}`, "error");
@@ -132,11 +136,9 @@
         if (pollingInterval) clearInterval(pollingInterval);
 
         requestBtn.disabled = true;
+        releaseBtn.classList.add('hidden');
         requestBtn.textContent = "Starting...";
         setStatus("Initializing...", "info");
-        statusDiv.classList.remove("hidden");
-        statusText.textContent = "Sending DHCPDISCOVER...";
-        statusDiv.className = "mb-2 p-2 bg-blue-50 rounded-md";
 
         fetch("/start-dhcp", {
           method: "POST",
@@ -168,6 +170,38 @@
             requestBtn.textContent = "Request IP Address";
           });
       });
+
+      // handle releaseIp button
+      releaseBtn.addEventListener('click', () => {
+            if (!leasedIpInfo.ip_address) {
+                alert('No leased IP to release.');
+                return;
+            }
+            
+            setStatus(`Releasing IP ${leasedIpInfo.ip_address}...`, 'info');
+            releaseBtn.disabled = true;
+
+            fetch('/release-ip', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    mac_address: macInput.value,
+                    ip_address: leasedIpInfo.ip_address,
+                    server_id: leasedIpInfo.server_id
+                })
+            }).then(res => res.json()).then(data => {
+                if (data.success) {
+                    setStatus(`IP ${leasedIpInfo.ip_address} released successfully.`, 'success');
+                    leasedIpInfo = {};
+                    releaseBtn.classList.add('hidden');
+                } else {
+                    setStatus(`<strong>Error:</strong> ${data.message}`, 'error');
+                }
+            }).finally(() => {
+                releaseBtn.disabled = false;
+            });
+        });
+
     </script>
   </body>
 </html>

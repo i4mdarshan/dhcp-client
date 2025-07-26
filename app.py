@@ -62,7 +62,8 @@ def status(task_id):
         
     return jsonify(
         status=client.state,
-        assigned_ip=client.assigned_ip
+        assigned_ip=client.assigned_ip,
+        server_id=client.server_id
     )
 
 @app.route('/release-ip', methods=['POST'])

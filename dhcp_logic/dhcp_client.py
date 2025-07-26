@@ -100,7 +100,7 @@ class DHCPClient:
                 return False
 
         except socket.timeout:
-            self.state = "FAILED: Timeout waiting for OFFER."
+            self.state = "Timeout waiting for OFFER."
             print("[!] Socket timedout waiting for DHCPOFFER.")
             return False
 
