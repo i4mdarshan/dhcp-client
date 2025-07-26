@@ -1,4 +1,5 @@
 import socket
+import sys
 from .dhcp_message import DHCPMessage, DHCPDISCOVER,DHCPOFFER,DHCPREQUEST,DHCPACK, DHCPNAK
 
 class DHCPClient:
@@ -8,8 +9,9 @@ class DHCPClient:
         self.mac_addr_str = mac_addr_str
         self.socket = None
         self.xid = None
-        self.offered_ip=None
-        self.server_id=None
+        self.offered_ip = None
+        self.server_id = None
+        self.assigned_ip = None
 
         print("Initializing DHCP Client...")
         self._create_and_bind_socket()
@@ -17,6 +19,11 @@ class DHCPClient:
 
     # function responsible to create and open UDP socket connection on port 68
     def _create_and_bind_socket(self):
+
+        # close any old socket connection before creating new one
+        if self.socket:
+            self.close()
+
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         self.socket.settimeout(10)
@@ -33,6 +40,9 @@ class DHCPClient:
             print("----------------------------")
             self.socket.close()
             self.socket = None
+
+            # exit if no socket is found
+            sys.exit(1)
 
     def close(self):
         if self.socket:
@@ -57,7 +67,7 @@ class DHCPClient:
         """
         discover_msg.options[55] = [1,3,6,15] 
         packed_discover = discover_msg.pack()
-        print(f"\n[D] Sending DHCPDISCOVER (xid: {hex(self.xid)})...")
+        print(f"[D] Sending DHCPDISCOVER (xid: {hex(self.xid)})...")
         self.socket.sendto(packed_discover, ('<broadcast>', 67))
         return
 
@@ -86,16 +96,75 @@ class DHCPClient:
                 print("[!] Received non-matching packet. Ignoring.")
                 return False
 
-
         except socket.timeout:
             print("[!] Socket timedout waiting for DHCPOFFER.")
             return False
 
         return True
 
-    def send_request():
-        pass
+    def send_request(self):
+        
+        # check if the socket is available and an ip is offered
+        if not self.socket or not self.offered_ip: return
 
-    def receive_acknowledgement():
-        pass
+        # build dhcp msg
+        request_msg = DHCPMessage(self.mac_addr_str)
+        request_msg.xid = self.xid
+        request_msg.options[53] = DHCPREQUEST
+        request_msg.options[50] = self.offered_ip
+        request_msg.options[54] = self.server_id
+
+        packed_request = request_msg.pack()
+
+
+        print(f"\n[R] Sending DHCPREQUEST for {self.offered_ip}...")
+        # broadcast the dhcp message on port 67
+        self.socket.sendto(packed_request, ('<broadcast>', 67)) 
+
+    def receive_acknowledgement(self):
+        
+        if not self.socket: return False
+
+        print("[A] Waiting for DHCPACK/DHCPNAK...")
+
+        try:
+
+            packet, addr = self.socket.recvfrom(1024)
+            ack_msg = DHCPMessage.unpack(packet)
+
+            if ack_msg.xid == self.xid:
+                
+                msg_type = ack_msg.options.get(53)
+                if msg_type == DHCPACK:
+                    self.assigned_ip = ack_msg.yiaddr
+                    print(f"[A] Received DHCPACK from {addr[0]}")
+                    print(f"    IP Address {self.assigned_ip} is now leased.")
+                    return True
+                elif msg_type == DHCPNAK:
+                    print(f"[!] Received DHCPNAK from {addr[0]}. Offer declined.")
+                    return False
+            else:
+                print("[!] Received non-matching packet. Ignoring.")
+                return False
+
+        except socket.timeout:
+            print("[!] Socket timed out waiting for DHCPACK/NAK.")
+            return False
+
     # IP orchestrator
+    def request_ip_address(self):
+        """ Execute the full D-O-R-A sequence. """
+        if not self.socket: return None
+
+        self.send_discover()
+        if self.receive_offer():
+            self.send_request()
+            if self.receive_acknowledgement():
+                print(f"--- IP Acquisition Successful ---")
+                print(f"    Assigned IP: {self.assigned_ip}")
+                self.close()
+                return self.assigned_ip
+            
+        print("--- IP Acquisition Failed ---")
+        self.close()
+        return None

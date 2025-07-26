@@ -32,10 +32,22 @@ def test_discover_and_offer():
     client.close()
     print("--- Done ---")
 
+def test_dora_flow():
+    print("--- Testing D-O-R-A flow ---")
+    YOUR_MAC_ADDRESS = "AA:BB:CC:DD:EE:FF"
+    
+    print("--- Starting Full DHCP Client Test ---")
+    print(f"Attempting to get an IP for MAC: {YOUR_MAC_ADDRESS}")
+    print("NOTE: This script must be run with administrator/root privileges (e.g., `sudo`)")
+    
+    client = DHCPClient(mac_addr_str=YOUR_MAC_ADDRESS)
+    client.request_ip_address()
+
 def run_tests():
     
-    test_socket_creation()
-    test_discover_and_offer()
+    #test_socket_creation()
+    #test_discover_and_offer()
+    test_dora_flow()
 
     
 

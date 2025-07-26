@@ -24,7 +24,7 @@ The goal of this phase is to handle the fundamental DHCP protocol interactions.
   - Configure the socket to send broadcast messages (`SO_BROADCAST`).
   - Bind the socket to listen for responses on the correct port (client port 68).
 
-- [ ] **Task 1.6: Implement the D-O-R-A Flow**
+- [x] **Task 1.6: Implement the D-O-R-A Flow**
   - **Discover:** Construct and serialize a `DHCPDISCOVER` message. Broadcast it using the UDP socket.
   - **Offer:** Listen for an incoming `DHCPOFFER` message from a server. Deserialize and validate it.
   - **Request:** Construct and serialize a `DHCPREQUEST` message using information from the offer. Broadcast it.
