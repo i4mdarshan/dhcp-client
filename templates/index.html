@@ -18,18 +18,15 @@
       <p class="text-gray-500 mb-3">
         Request an IP address from your local DHCP server.
       </p>
-      <div
-        id="status"
-        class="mb-2 p-2 bg-gray-50 rounded-md hidden"
-      >
-        <p class="text-green-700 font-small"></p>
+      <div id="status" class="mb-2 p-2 bg-gray-50 rounded-md hidden">
+        <p class="font-small"></p>
       </div>
 
       <div class="mb-4">
         <label for="macAddress" class="block text-sm font-medium text-gray-700"
           >Client MAC Address</label
         >
-        <div class="flex items-center mt-1">
+        <div class="flex items-center my-2">
           <input
             type="text"
             id="macAddress"
@@ -44,14 +41,40 @@
           </button>
         </div>
       </div>
+
+      <div class="space-y-4">
+            <button id="requestIpBtn" class="w-full bg-gray-800 text-white py-2 px-4 rounded-md hover:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-200">
+                Request IP Address
+            </button>
+            <button id="releaseIpBtn" class="w-full bg-red-600 text-white py-2 px-4 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 hidden">
+                Release IP Address
+            </button>
+        </div>
     </div>
 
     <script>
+      const requestBtn = document.getElementById("requestIpBtn");
       const detectMacBtn = document.getElementById("detectMacBtn");
       const macInput = document.getElementById("macAddress");
       const statusDiv = document.getElementById("status");
       const statusText = statusDiv.querySelector("p");
+      let pollingInterval;
 
+      // set status
+      function setStatus(message, type) {
+        statusDiv.classList.remove("hidden");
+        statusText.innerHTML = message;
+        if (type === "info") {
+          statusDiv.className = "mb-2 p-2 bg-blue-100 text-blue-800 rounded-md";
+        } else if (type === "success") {
+          statusDiv.className =
+            "mb-2 p-2 bg-green-100 text-green-800 rounded-md";
+        } else if (type === "error") {
+          statusDiv.className = "mb-2 p-2 bg-red-100 text-red-800 rounded-md";
+        }
+      }
+
+      // handle detect button
       detectMacBtn.addEventListener("click", () => {
         statusText.textContent = "Detecting MAC address...";
         statusDiv.classList.remove("hidden");
@@ -62,17 +85,87 @@
           .then((data) => {
             if (data.success) {
               macInput.value = data.mac_address;
-              statusText.textContent = "MAC Address detected!";
-              statusDiv.className =
-                "mb-2 p-2 bg-green-50 rounded-md";
+              setStatus("MAC Address detected!", "success");
             } else {
-              statusText.textContent = `Error detecting MAC: ${data.error}`;
-              statusDiv.className = "mb-2 p-2 bg-red-50 rounded-md";
+              setStatus(`Error detecting MAC: ${data.error}`, "error");
             }
           })
           .catch((err) => {
-            statusText.textContent = "An error occured while detecting.";
-            statusDiv.className = "mb-2 p-2 bg-red-50 rounded-md";
+            setStatus("An error occured while detecting.", "error");
+          });
+      });
+
+      // poll status to display in real-time
+      function pollStatus(taskId) {
+        pollingInterval = setInterval(() => {
+          fetch(`/status/${taskId}`)
+            .then((response) => response.json())
+            .then((data) => {
+              if (data.status === "SUCCESS") {
+                clearInterval(pollingInterval);
+                setStatus(
+                  `<strong>Success!</strong> Assigned IP: <span class="font-mono">${data.assigned_ip}</span>`,
+                  "success"
+                );
+                requestBtn.disabled = false;
+                requestBtn.textContent = "Request IP Address";
+              } else if (data.status.startsWith("FAILED")) {
+                clearInterval(pollingInterval);
+                setStatus(`<strong>Failed:</strong> ${data.status}`, "error");
+                requestBtn.disabled = false;
+                requestBtn.textContent = "Request IP Address";
+              } else {
+                setStatus(data.status, "info");
+              }
+            });
+        }, 1000); // Poll every 1 second
+      }
+
+      // handle request IP address button
+      requestBtn.addEventListener("click", () => {
+        const macAddress = macInput.value;
+        if (!macAddress) {
+          alert("Please enter or detect a MAC address.");
+          return;
+        }
+
+        if (pollingInterval) clearInterval(pollingInterval);
+
+        requestBtn.disabled = true;
+        requestBtn.textContent = "Starting...";
+        setStatus("Initializing...", "info");
+        statusDiv.classList.remove("hidden");
+        statusText.textContent = "Sending DHCPDISCOVER...";
+        statusDiv.className = "mb-2 p-2 bg-blue-50 rounded-md";
+
+        fetch("/start-dhcp", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ mac_address: macAddress }),
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            if (data.success) {
+              pollStatus(data.task_id);
+            } else {
+              setStatus(`<strong>Error:</strong> ${data.message}`, "error");
+              requestBtn.disabled = false;
+              requestBtn.textContent = "Request IP Address";
+            }
+          })
+          .catch((error) => {
+            setStatus(
+              "<strong>Error:</strong> An unexpected error occurred. Check the console.",
+              "error"
+            );
+            requestBtn.disabled = false;
+            requestBtn.textContent = "Request IP Address";
+          })
+          .finally(() => {
+            requestBtn.disabled = false;
+            requestBtn.textContent = "Request IP Address";
           });
       });
     </script>

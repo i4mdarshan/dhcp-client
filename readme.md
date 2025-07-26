@@ -71,17 +71,17 @@ The goal of this phase is to build an interface to control the client and displa
     - Create a simple HTML template for the user interface.
     - Add a detect MAC address button in the UI
 
-- [ ] **Task 2.2: UI Controls and Display**
+- [x] **Task 2.2: UI Controls and Display**
     - Add a "Request IP Address" button to the HTML page.
     - Create areas to display the client's status (e.g., "Discovering...", "Requesting...", "Bound"), the assigned IP address, and a log of messages.
 
-- [ ] **Task 2.3: API Endpoints**
+- [x] **Task 2.3: API Endpoints**
     - Create a Flask route (e.g., `/start-dhcp`) that the frontend button can call.
     - This endpoint will trigger the DHCP logic from Phase 1.
     - Create another endpoint (e.g., `/status`) for the frontend to poll for updates.
 
 ### Phase 3: Integration and Refinement
 
-- [ ] **Task 3.1: Real-time Updates**
+- [x] **Task 3.1: Real-time Updates**
 - [ ] **Task 3.2: Handling Other Message Types**
 - [ ] **Task 3.3: Error Handling & Edge Case**

@@ -1,6 +1,6 @@
 import socket
 import sys
-from .dhcp_message import DHCPMessage, DHCPDISCOVER,DHCPOFFER,DHCPREQUEST,DHCPACK, DHCPNAK
+from .dhcp_message import DHCPMessage, DHCPDISCOVER,DHCPOFFER,DHCPREQUEST,DHCPACK, DHCPNAK,DHCPRELEASE
 
 class DHCPClient:
     """Manages the state and network communication for a DHCP Client"""
@@ -12,6 +12,7 @@ class DHCPClient:
         self.offered_ip = None
         self.server_id = None
         self.assigned_ip = None
+        self.state = "INITIALIZING"
 
         print("Initializing DHCP Client...")
         self._create_and_bind_socket()
@@ -30,6 +31,7 @@ class DHCPClient:
 
         try:
             self.socket.bind(('', 68))
+            self.state = "READY"
             print("Socket created and bound successfully to ('', 68).")
         except OSError as e:
             print(f"--- SOCKET BINDING ERROR ---")
@@ -40,6 +42,7 @@ class DHCPClient:
             print("----------------------------")
             self.socket.close()
             self.socket = None
+            self.state = f"ERROR: Could not bind to port 68. {e}"
 
             # exit if no socket is found
             sys.exit(1)
@@ -55,7 +58,7 @@ class DHCPClient:
 
         # check if socket is present
         if not self.socket: return
-
+        self.state = "Sending DISCOVER..."
         discover_msg = DHCPMessage(self.mac_addr_str)
         self.xid = discover_msg.xid
         discover_msg.options[53]= DHCPDISCOVER
@@ -75,7 +78,7 @@ class DHCPClient:
 
         # check if socket is present
         if not self.socket: return False
-        
+        self.state = "Waiting for OFFER..."
         print("[O] Waiting for DHCPOFFER...")
         try:
             # get packets and address from the socket
@@ -88,7 +91,7 @@ class DHCPClient:
                 # store offered ip and server id
                 self.offered_ip = offer_msg.yiaddr
                 self.server_id = offer_msg.options.get(54)
-
+                self.state = f"Offer received for {self.offered_ip}"
                 print(f"[O] Received DHCPOFFER from {addr[0]} ({self.server_id})")
                 print(f"    Offered IP: {self.offered_ip}")
                 return True
@@ -97,6 +100,7 @@ class DHCPClient:
                 return False
 
         except socket.timeout:
+            self.state = "FAILED: Timeout waiting for OFFER."
             print("[!] Socket timedout waiting for DHCPOFFER.")
             return False
 
@@ -106,7 +110,7 @@ class DHCPClient:
         
         # check if the socket is available and an ip is offered
         if not self.socket or not self.offered_ip: return
-
+        self.state = f"Sending REQUEST for {self.offered_ip}..."
         # build dhcp msg
         request_msg = DHCPMessage(self.mac_addr_str)
         request_msg.xid = self.xid
@@ -124,7 +128,7 @@ class DHCPClient:
     def receive_acknowledgement(self):
         
         if not self.socket: return False
-
+        self.state = "Waiting for ACK..."
         print("[A] Waiting for DHCPACK/DHCPNAK...")
 
         try:
@@ -137,10 +141,12 @@ class DHCPClient:
                 msg_type = ack_msg.options.get(53)
                 if msg_type == DHCPACK:
                     self.assigned_ip = ack_msg.yiaddr
+                    self.state = "SUCCESS"
                     print(f"[A] Received DHCPACK from {addr[0]}")
                     print(f"    IP Address {self.assigned_ip} is now leased.")
                     return True
                 elif msg_type == DHCPNAK:
+                    self.state = "FAILED: Received NAK from server."
                     print(f"[!] Received DHCPNAK from {addr[0]}. Offer declined.")
                     return False
             else:
@@ -148,13 +154,14 @@ class DHCPClient:
                 return False
 
         except socket.timeout:
+            self.state = "FAILED: Timeout waiting for ACK."
             print("[!] Socket timed out waiting for DHCPACK/NAK.")
             return False
 
     # IP orchestrator
     def request_ip_address(self):
         """ Execute the full D-O-R-A sequence. """
-        if not self.socket: return None
+        if not self.socket or not self.state == "READY": return None
 
         self.send_discover()
         if self.receive_offer():
@@ -168,3 +175,20 @@ class DHCPClient:
         print("--- IP Acquisition Failed ---")
         self.close()
         return None
+    
+    # release ip addresses
+    def release_ip_address(self, ip_to_release: str, server_id: str):
+        """Builds and sends a DHCPRELEASE message."""
+        if not self.socket: return
+        
+        release_msg = DHCPMessage(self.mac_addr_str)
+        release_msg.ciaddr = ip_to_release # Client IP must be the one we are releasing
+        release_msg.options[53] = DHCPRELEASE
+        release_msg.options[54] = server_id # Identify the server
+        
+        packed_release = release_msg.pack()
+        print(f"\n[RELEASE] Sending DHCPRELEASE for {ip_to_release} to {server_id}...")
+        
+        # A DHCPRELEASE is sent unicast to the server that gave the lease.
+        self.socket.sendto(packed_release, (server_id, 67))
+        self.close()
