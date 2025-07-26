@@ -12,7 +12,19 @@
       @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap");
     </style>
   </head>
-  <body>
-    <h1>Hello from Flask</h1>
+  <body class="bg-gray-100 flex items-center justify-center min-h-screen">
+    
+    <div class="bg-white p-8 rounded-xl shadow-lg w-full max-w-md">
+        <h1 class="text-2xl font-bold text-gray-800 mb-2">DHCP Client</h1>
+        <p class="text-gray-500 mb-6">Request an IP address from your local DHCP server.</p>
+
+        <div class="mb-4">
+            <label for="macAddress" class="block text-sm font-medium text-gray-700">Client MAC Address</label>
+            <div class="flex items-center mt-1">
+                <input type="text" id="macAddress" class="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md py-2" placeholder="e.g., aa:bb:cc:dd:ee:ff">
+                <button id="detectMacBtn" class="ml-2 px-2 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50">Detect</button>
+            </div>
+        </div>
+    </div>
   </body>
 </html>
