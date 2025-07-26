@@ -13,18 +13,68 @@
     </style>
   </head>
   <body class="bg-gray-100 flex items-center justify-center min-h-screen">
-    
     <div class="bg-white p-8 rounded-xl shadow-lg w-full max-w-md">
-        <h1 class="text-2xl font-bold text-gray-800 mb-2">DHCP Client</h1>
-        <p class="text-gray-500 mb-6">Request an IP address from your local DHCP server.</p>
+      <h1 class="text-2xl font-bold text-gray-800 mb-1">DHCP Client</h1>
+      <p class="text-gray-500 mb-3">
+        Request an IP address from your local DHCP server.
+      </p>
+      <div
+        id="status"
+        class="mb-2 p-2 bg-gray-50 rounded-md hidden"
+      >
+        <p class="text-green-700 font-small"></p>
+      </div>
 
-        <div class="mb-4">
-            <label for="macAddress" class="block text-sm font-medium text-gray-700">Client MAC Address</label>
-            <div class="flex items-center mt-1">
-                <input type="text" id="macAddress" class="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md py-2" placeholder="e.g., aa:bb:cc:dd:ee:ff">
-                <button id="detectMacBtn" class="ml-2 px-2 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50">Detect</button>
-            </div>
+      <div class="mb-4">
+        <label for="macAddress" class="block text-sm font-medium text-gray-700"
+          >Client MAC Address</label
+        >
+        <div class="flex items-center mt-1">
+          <input
+            type="text"
+            id="macAddress"
+            class="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md py-2"
+            placeholder="e.g., aa:bb:cc:dd:ee:ff"
+          />
+          <button
+            id="detectMacBtn"
+            class="ml-2 px-2 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50"
+          >
+            Detect
+          </button>
         </div>
+      </div>
     </div>
+
+    <script>
+      const detectMacBtn = document.getElementById("detectMacBtn");
+      const macInput = document.getElementById("macAddress");
+      const statusDiv = document.getElementById("status");
+      const statusText = statusDiv.querySelector("p");
+
+      detectMacBtn.addEventListener("click", () => {
+        statusText.textContent = "Detecting MAC address...";
+        statusDiv.classList.remove("hidden");
+        statusDiv.className = "mb-2 p-2 bg-blue-50 rounded-md";
+
+        fetch("/get-mac-address")
+          .then((response) => response.json())
+          .then((data) => {
+            if (data.success) {
+              macInput.value = data.mac_address;
+              statusText.textContent = "MAC Address detected!";
+              statusDiv.className =
+                "mb-2 p-2 bg-green-50 rounded-md";
+            } else {
+              statusText.textContent = `Error detecting MAC: ${data.error}`;
+              statusDiv.className = "mb-2 p-2 bg-red-50 rounded-md";
+            }
+          })
+          .catch((err) => {
+            statusText.textContent = "An error occured while detecting.";
+            statusDiv.className = "mb-2 p-2 bg-red-50 rounded-md";
+          });
+      });
+    </script>
   </body>
 </html>
