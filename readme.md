@@ -66,9 +66,10 @@ The goal of this phase is to handle the fundamental DHCP protocol interactions.
 
 The goal of this phase is to build an interface to control the client and display results.
 
-- [ ] **Task 2.1: Basic Web Server**
+- [x] **Task 2.1: Basic Web Server**
     - Set up a basic Flask application in a separate file.
     - Create a simple HTML template for the user interface.
+    - Add a detect MAC address button in the UI
 
 - [ ] **Task 2.2: UI Controls and Display**
     - Add a "Request IP Address" button to the HTML page.
