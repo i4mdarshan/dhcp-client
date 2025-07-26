@@ -39,3 +39,63 @@ class DHCPClient:
             self.socket.close()
             self.socket = None
             print("Socket closed.")
+
+    # DORA functions for the client
+    def send_discover(self):
+
+        # check if socket is present
+        if not self.socket: return
+
+        discover_msg = DHCPMessage(self.mac_addr_str)
+        self.xid = discover_msg.xid
+        discover_msg.options[53]= DHCPDISCOVER
+        """
+            1 -> Subnet Mask
+            3 -> Router
+            6 -> DNS Server
+            15 -> Domain Name
+        """
+        discover_msg.options[55] = [1,3,6,15] 
+        packed_discover = discover_msg.pack()
+        print(f"\n[D] Sending DHCPDISCOVER (xid: {hex(self.xid)})...")
+        self.socket.sendto(packed_discover, ('<broadcast>', 67))
+        return
+
+    def receive_offer(self):
+
+        # check if socket is present
+        if not self.socket: return False
+        
+        print("[O] Waiting for DHCPOFFER...")
+        try:
+            # get packets and address from the socket
+            packet, addr = self.socket.recvfrom(1024)
+            offer_msg = DHCPMessage().unpack(packet)
+
+            # validate the offer
+            if offer_msg.xid == self.xid and offer_msg.options.get(53) == DHCPOFFER:
+
+                # store offered ip and server id
+                self.offered_ip = offer_msg.yiaddr
+                self.server_id = offer_msg.options.get(54)
+
+                print(f"[O] Received DHCPOFFER from {addr[0]} ({self.server_id})")
+                print(f"    Offered IP: {self.offered_ip}")
+                return True
+            else:
+                print("[!] Received non-matching packet. Ignoring.")
+                return False
+
+
+        except socket.timeout:
+            print("[!] Socket timedout waiting for DHCPOFFER.")
+            return False
+
+        return True
+
+    def send_request():
+        pass
+
+    def receive_acknowledgement():
+        pass
+    # IP orchestrator
