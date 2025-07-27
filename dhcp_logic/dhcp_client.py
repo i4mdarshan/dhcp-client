@@ -1,5 +1,6 @@
 import socket
 import sys
+import traceback
 from .dhcp_message import DHCPMessage, DHCPDISCOVER,DHCPOFFER,DHCPREQUEST,DHCPACK, DHCPNAK,DHCPRELEASE
 
 class DHCPClient:
@@ -25,11 +26,10 @@ class DHCPClient:
         if self.socket:
             self.close()
 
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        self.socket.settimeout(10)
-
         try:
+            self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            self.socket.settimeout(10)
             self.socket.bind(('', 68))
             self.state = "READY"
             print("Socket created and bound successfully to ('', 68).")
@@ -40,7 +40,7 @@ class DHCPClient:
             print("or you don't have sufficient privileges.")
             print("On Linux/macOS, try running the script with 'sudo'.")
             print("----------------------------")
-            self.socket.close()
+            if self.socket: self.socket.close()
             self.socket = None
             self.state = f"ERROR: Could not bind to port 68. {e}"
 
@@ -58,21 +58,25 @@ class DHCPClient:
 
         # check if socket is present
         if not self.socket: return
-        self.state = "Sending DISCOVER..."
-        discover_msg = DHCPMessage(self.mac_addr_str)
-        self.xid = discover_msg.xid
-        discover_msg.options[53]= DHCPDISCOVER
-        """
-            1 -> Subnet Mask
-            3 -> Router
-            6 -> DNS Server
-            15 -> Domain Name
-        """
-        discover_msg.options[55] = [1,3,6,15] 
-        packed_discover = discover_msg.pack()
-        print(f"[D] Sending DHCPDISCOVER (xid: {hex(self.xid)})...")
-        self.socket.sendto(packed_discover, ('<broadcast>', 67))
-        return
+
+        try:
+            self.state = "Sending DISCOVER..."
+            discover_msg = DHCPMessage(self.mac_addr_str)
+            self.xid = discover_msg.xid
+            discover_msg.options[53]= DHCPDISCOVER
+            """
+                1 -> Subnet Mask
+                3 -> Router
+                6 -> DNS Server
+                15 -> Domain Name
+            """
+            discover_msg.options[55] = [1,3,6,15] 
+            packed_discover = discover_msg.pack()
+            print(f"[D] Sending DHCPDISCOVER (xid: {hex(self.xid)})...")
+            self.socket.sendto(packed_discover, ('<broadcast>', 67))
+        except OSError as ex:
+            self.state = f"FAILED: Network error on DISCOVER. {ex}"
+            print(f"[!] Network error: {ex}")
 
     def receive_offer(self):
 
@@ -103,27 +107,31 @@ class DHCPClient:
             self.state = "Timeout waiting for OFFER."
             print("[!] Socket timedout waiting for DHCPOFFER.")
             return False
-
-        return True
+        except Exception as ex:
+            self.state = f"FAILED: Error parsing OFFER. {ex}"
+            print(f"[!] Packet parsing error: {ex}\n{traceback.format_exc()}")
+            return False
 
     def send_request(self):
         
         # check if the socket is available and an ip is offered
         if not self.socket or not self.offered_ip: return
-        self.state = f"Sending REQUEST for {self.offered_ip}..."
-        # build dhcp msg
-        request_msg = DHCPMessage(self.mac_addr_str)
-        request_msg.xid = self.xid
-        request_msg.options[53] = DHCPREQUEST
-        request_msg.options[50] = self.offered_ip
-        request_msg.options[54] = self.server_id
 
-        packed_request = request_msg.pack()
-
-
-        print(f"\n[R] Sending DHCPREQUEST for {self.offered_ip}...")
-        # broadcast the dhcp message on port 67
-        self.socket.sendto(packed_request, ('<broadcast>', 67)) 
+        try: 
+            self.state = f"Sending REQUEST for {self.offered_ip}..."
+            # build dhcp msg
+            request_msg = DHCPMessage(self.mac_addr_str)
+            request_msg.xid = self.xid
+            request_msg.options[53] = DHCPREQUEST
+            request_msg.options[50] = self.offered_ip
+            request_msg.options[54] = self.server_id
+            packed_request = request_msg.pack()
+            print(f"\n[R] Sending DHCPREQUEST for {self.offered_ip}...")
+            # broadcast the dhcp message on port 67
+            self.socket.sendto(packed_request, ('<broadcast>', 67)) 
+        except OSError as ex:
+            self.state = f"FAILED: Network error on REQUEST. {ex}"
+            print(f"[!] Network error: {ex}")
 
     def receive_acknowledgement(self):
         
@@ -146,7 +154,7 @@ class DHCPClient:
                     print(f"    IP Address {self.assigned_ip} is now leased.")
                     return True
                 elif msg_type == DHCPNAK:
-                    self.state = "FAILED: Received NAK from server."
+                    self.state = "FAILED: Server denied the request (NAK)."
                     print(f"[!] Received DHCPNAK from {addr[0]}. Offer declined.")
                     return False
             else:
@@ -156,6 +164,10 @@ class DHCPClient:
         except socket.timeout:
             self.state = "FAILED: Timeout waiting for ACK."
             print("[!] Socket timed out waiting for DHCPACK/NAK.")
+            return False
+        except Exception as ex:
+            self.state = f"FAILED: Error parsing ACK. {ex}"
+            print(f"[!] Packet parsing error: {ex}\n{traceback.format_exc()}")
             return False
 
     # IP orchestrator
@@ -181,14 +193,18 @@ class DHCPClient:
         """Builds and sends a DHCPRELEASE message."""
         if not self.socket: return
         
-        release_msg = DHCPMessage(self.mac_addr_str)
-        release_msg.ciaddr = ip_to_release # Client IP must be the one we are releasing
-        release_msg.options[53] = DHCPRELEASE
-        release_msg.options[54] = server_id # Identify the server
-        
-        packed_release = release_msg.pack()
-        print(f"\n[RELEASE] Sending DHCPRELEASE for {ip_to_release} to {server_id}...")
-        
-        # A DHCPRELEASE is sent unicast to the server that gave the lease.
-        self.socket.sendto(packed_release, (server_id, 67))
-        self.close()
+        try:
+            release_msg = DHCPMessage(self.mac_addr_str)
+            release_msg.ciaddr = ip_to_release # Client IP must be the one we are releasing
+            release_msg.options[53] = DHCPRELEASE
+            release_msg.options[54] = server_id # Identify the server
+            
+            packed_release = release_msg.pack()
+            print(f"\n[RELEASE] Sending DHCPRELEASE for {ip_to_release} to {server_id}...")
+            
+            # A DHCPRELEASE is sent unicast to the server that gave the lease.
+            self.socket.sendto(packed_release, (server_id, 67))
+        except OSError as ex:
+            print(f"[!] Network error on RELEASE: {ex}")
+        finally:
+            self.close()

@@ -84,4 +84,6 @@ The goal of this phase is to build an interface to control the client and displa
 
 - [x] **Task 3.1: Real-time Updates**
 - [ ] **Task 3.2: Handling Other Message Types**
+    - Add more specific logic for handling DHCPNAK messages to provide clearer error feedback.
 - [ ] **Task 3.3: Error Handling & Edge Case**
+    - Add more robust error handling and edge cases (e.g., what if the network cable is unplugged mid-process?).
